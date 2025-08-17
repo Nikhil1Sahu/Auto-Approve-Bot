@@ -16,7 +16,7 @@ class text(object):
 
 𝘉𝘺 = @{}"""
 
-    ABOUT = """<b>‣ ᴍʏ ɴᴀᴍᴇ : <a href='https://www.youtube.com/@NGCodeHub'>NG QUICK ACCEPT BOT</a>
+    ABOUT = """<b>‣ ᴍʏ ɴᴀᴍᴇ : <a href='https://www.youtube.com/@CodeByJerry'>NG QUICK ACCEPT BOT</a>
 ‣ ʟɪʙʀᴀʀʏ : <a href='https://docs.pyrogram.org/'>ᴘʏʀᴏɢʀᴀᴍ</a>
 ‣ ᴅᴀᴛᴀʙᴀsᴇ : <a href='https://www.mongodb.com/'>ᴍᴏɴɢᴏᴅʙ</a>
 ‣ ʟᴀɴɢᴜᴀɢᴇ : <a href='https://www.python.org/'>ᴘʏᴛʜᴏɴ 𝟹</a>
