@@ -12,9 +12,14 @@ class Techifybots:
 
     async def add_user(self, user_id: int, name: str) -> dict[str, Any] | None:
         try:
-            user: dict[str, Any] = {"user_id": user_id, "name": name, "session": None}
+            user: dict[str, Any] = {
+                "user_id": user_id,
+                "name": name,
+                "session": None,
+                "thumbnail": None  # added field
+            }
             await self.users.insert_one(user)
-            self.cache[user_id] = user      
+            self.cache[user_id] = user
             return user
         except Exception as e:
             print("Error in add_user:", e)
@@ -69,6 +74,43 @@ class Techifybots:
             return result.deleted_count > 0
         except Exception as e:
             print("Error in delete_user:", e)
+            return False
+
+    # ------------------- THUMBNAIL FUNCTIONS -------------------
+
+    async def save_thumb(self, user_id: int, file_id: str) -> bool:
+        try:
+            result = await self.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"thumbnail": file_id}},
+                upsert=True
+            )
+            if user_id in self.cache:
+                self.cache[user_id]["thumbnail"] = file_id
+            return result.modified_count > 0 or result.upserted_id is not None
+        except Exception as e:
+            print("Error in save_thumb:", e)
+            return False
+
+    async def get_thumb(self, user_id: int) -> str | None:
+        try:
+            user = await self.get_user(user_id)
+            return user.get("thumbnail") if user else None
+        except Exception as e:
+            print("Error in get_thumb:", e)
+            return None
+
+    async def clear_thumb(self, user_id: int) -> bool:
+        try:
+            result = await self.users.update_one(
+                {"user_id": user_id},
+                {"$unset": {"thumbnail": ""}}
+            )
+            if user_id in self.cache and "thumbnail" in self.cache[user_id]:
+                self.cache[user_id]["thumbnail"] = None
+            return result.modified_count > 0
+        except Exception as e:
+            print("Error in clear_thumb:", e)
             return False
 
 tb = Techifybots()
