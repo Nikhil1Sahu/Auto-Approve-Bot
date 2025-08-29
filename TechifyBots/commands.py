@@ -7,6 +7,27 @@ import asyncio
 from Script import text
 from .db import tb
 from .fsub import get_fsub
+import os
+
+# Dictionary to store thumbnails temporarily (per user)
+user_thumbs = {}
+
+# Helper to check admin rights
+async def is_admin(client: Client, message: Message) -> bool:
+    user_id = message.from_user.id
+    # allow if matches bot admin from config
+    try:
+        if user_id == ADMIN:
+            return True
+    except Exception:
+        pass
+    # otherwise check chat admin/owner (works for groups/channels)
+    try:
+        member = await client.get_chat_member(message.chat.id, user_id)
+        return member.status in [enums.ChatMemberStatus.OWNER, enums.ChatMemberStatus.ADMINISTRATOR]
+    except Exception:
+        # if anything fails, deny
+        return False
 
 @Client.on_message(filters.command("start"))
 async def start_cmd(client, message):
@@ -101,3 +122,119 @@ async def approve_new(client, m):
     except Exception as e:
         print(str(e))
         pass
+
+# ========================
+# New Thumbnail + Post Commands
+# ========================
+
+@Client.on_message(filters.command("setthumb") & filters.reply)
+async def set_thumb(client, message: Message):
+    # admin check
+    if not await is_admin(client, message):
+        return await message.reply_text("⚠️ Only admins can use this command")
+    if message.reply_to_message.photo:
+        file_id = message.reply_to_message.photo.file_id
+        # try to save to DB via tb if available
+        try:
+            if hasattr(tb, "set_thumb"):
+                if asyncio.iscoroutinefunction(tb.set_thumb):
+                    await tb.set_thumb(message.from_user.id, file_id)
+                else:
+                    tb.set_thumb(message.from_user.id, file_id)
+                return await message.reply_text("✅ Thumbnail saved to database")
+        except Exception:
+            pass
+        # fallback: download locally and save path in memory
+        path = f"thumb_{message.from_user.id}.jpg"
+        await message.reply_to_message.download(file_name=path)
+        user_thumbs[message.from_user.id] = path
+        await message.reply_text("✅ Thumbnail saved locally Now reply to a PDF and use /post.")
+    else:
+        await message.reply_text("Reply to a photo with /setthumb to save it.")
+
+@Client.on_message(filters.command("clearthumb"))
+async def clear_thumb(client, message: Message):
+    # admin check
+    if not await is_admin(client, message):
+        return await message.reply_text("⚠️ Only admins can use this command")
+    user_id = message.from_user.id
+    # try DB clear first
+    try:
+        if hasattr(tb, "clear_thumb"):
+            if asyncio.iscoroutinefunction(tb.clear_thumb):
+                await tb.clear_thumb(user_id)
+            else:
+                tb.clear_thumb(user_id)
+            return await message.reply_text("🗑️ Thumbnail cleared from database")
+    except Exception:
+        pass
+    # fallback to local removal
+    if user_id in user_thumbs:
+        try:
+            os.remove(user_thumbs[user_id])
+        except:
+            pass
+        user_thumbs.pop(user_id, None)
+        await message.reply_text("🗑️ Local thumbnail cleared")
+    else:
+        await message.reply_text("No thumbnail found for you.")
+
+@Client.on_message(filters.command("post"))
+async def post_handler(client, message: Message):
+    # admin check
+    if not await is_admin(client, message):
+        return await message.reply_text("⚠️ Only admins can use this command")
+    try:
+        args = message.text.split(maxsplit=1)
+        if len(args) < 2:
+            return await message.reply_text("Usage:\n`/post <channel_id>` (reply to PDF/Text)")
+
+        channel_id = args[1]
+        user_id = message.from_user.id
+        thumb = None
+
+        # try to get thumbnail from DB if available
+        try:
+            if hasattr(tb, "get_thumb"):
+                if asyncio.iscoroutinefunction(tb.get_thumb):
+                    db_thumb = await tb.get_thumb(user_id)
+                else:
+                    db_thumb = tb.get_thumb(user_id)
+                if db_thumb:
+                    thumb = db_thumb
+        except Exception:
+            pass
+
+        # fallback to in-memory/local thumbnail
+        if not thumb:
+            thumb = user_thumbs.get(user_id, None)
+
+        if message.reply_to_message:
+            if message.reply_to_message.document and message.reply_to_message.document.mime_type == "application/pdf":
+                if thumb:
+                    await client.send_document(
+                        chat_id=channel_id,
+                        document=message.reply_to_message.document.file_id,
+                        thumb=thumb,
+                        caption=message.reply_to_message.caption or "📄 PDF File"
+                    )
+                else:
+                    await client.send_document(
+                        chat_id=channel_id,
+                        document=message.reply_to_message.document.file_id,
+                        caption=message.reply_to_message.caption or "📄 PDF File"
+                    )
+            elif message.reply_to_message.text:
+                await client.send_message(
+                    chat_id=channel_id,
+                    text=message.reply_to_message.text
+                )
+            else:
+                return await message.reply_text("Reply with a PDF or text to post.")
+        else:
+            return await message.reply_text("Reply to a PDF/text with /post to send it.")
+
+        await message.reply_text("✅ Posted successfully!")
+
+    except Exception as e:
+        await message.reply_text(f"❌ Error: {e}")
