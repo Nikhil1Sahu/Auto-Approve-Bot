@@ -17,8 +17,8 @@ LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", 0))
 AUTH_CHANNELS = list(map(int, os.environ.get("AUTH_CHANNELS", "").split()))  
 
 # Database
-DB_URI = os.environ.get("DATABASE_URL")
-DB_NAME = os.environ.get("DB_NAME")
+DB_URI = os.environ.get("DATABASE_URL", "")
+DB_NAME = os.environ.get("DB_NAME", "")
 
 # Features
 NEW_REQ_MODE = os.environ.get("NEW_REQ_MODE", "False").lower() == "true"
