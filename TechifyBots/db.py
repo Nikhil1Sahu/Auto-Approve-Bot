@@ -1,10 +1,17 @@
+import os
 from typing import Any
-from config import DB_URI, DB_NAME
 from motor import motor_asyncio
+from config import DB_URI, DB_NAME
 
-client: motor_asyncio.AsyncIOMotorClient[Any] = motor_asyncio.AsyncIOMotorClient(DB_URI)
+# ------------------ CHECK ENV VARS ------------------
+if not DB_URI or not DB_NAME:
+    raise ValueError("DB_URI or DB_NAME not set in environment variables")
+
+# ------------------ DATABASE CONNECTION ------------------
+client = motor_asyncio.AsyncIOMotorClient(DB_URI)
 db = client[DB_NAME]
 
+# ------------------  CLASS ------------------
 class Techifybots:
     def __init__(self):
         self.users = db["users"]
@@ -16,7 +23,7 @@ class Techifybots:
                 "user_id": user_id,
                 "name": name,
                 "session": None,
-                "thumbnail": None  # added field
+                "thumbnail": None
             }
             await self.users.insert_one(user)
             self.cache[user_id] = user
@@ -77,7 +84,6 @@ class Techifybots:
             return False
 
     # ------------------- THUMBNAIL FUNCTIONS -------------------
-
     async def save_thumb(self, user_id: int, file_id: str) -> bool:
         try:
             result = await self.users.update_one(
@@ -113,4 +119,5 @@ class Techifybots:
             print("Error in clear_thumb:", e)
             return False
 
+# ------------------ INSTANCE ------------------
 tb = Techifybots()
