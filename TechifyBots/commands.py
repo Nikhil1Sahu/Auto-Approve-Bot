@@ -123,17 +123,25 @@ async def post_handler(client, message: Message):
     channel_id = args[1]
     user_id = message.from_user.id
 
-    # try DB thumb
+    # try DB thumb first, fallback to local
     thumb = None
     try:
         thumb = await tb.get_thumb(user_id)
     except:
-        thumb = user_thumbs.get(user_id, None)
+        thumb = None
+
+    if not thumb and user_id in user_thumbs:
+        from pyrogram.types import InputFile
+        thumb = InputFile(user_thumbs[user_id])
 
     # send PDF or text
     reply_msg = message.reply_to_message
     if reply_msg.document and reply_msg.document.mime_type == "application/pdf":
-        kwargs = {"chat_id": channel_id, "document": reply_msg.document.file_id, "caption": reply_msg.caption or "📄 PDF File"}
+        kwargs = {
+            "chat_id": channel_id,
+            "document": reply_msg.document.file_id,
+            "caption": reply_msg.caption or "📄 PDF File"
+        }
         if thumb:
             kwargs["thumb"] = thumb
         await client.send_document(**kwargs)
