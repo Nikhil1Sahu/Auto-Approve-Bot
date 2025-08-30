@@ -10,7 +10,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN = int(os.environ.get("ADMIN", 0))  # must set in env
 
 # Start Pictures (multiple supported, optional)
-PICS = os.environ.get("START_PIC", "").split()
+PICS = os.environ.get("PICS", "").split()
 
 # Channels
 LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", 0))  
