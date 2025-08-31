@@ -17,13 +17,15 @@ class Techifybots:
         self.users = db["users"]
         self.cache: dict[int, dict[str, Any]] = {}
 
+    # ------------------- USER FUNCTIONS -------------------
     async def add_user(self, user_id: int, name: str) -> dict[str, Any] | None:
         try:
             user: dict[str, Any] = {
                 "user_id": user_id,
                 "name": name,
                 "session": None,
-                "thumbnail": None
+                "thumbnail": None,
+                "thumbnails": {}  # store multiple thumbnails {name: file_id}
             }
             await self.users.insert_one(user)
             self.cache[user_id] = user
@@ -83,7 +85,7 @@ class Techifybots:
             print("Error in delete_user:", e)
             return False
 
-    # ------------------- THUMBNAIL FUNCTIONS -------------------
+    # ------------------- SINGLE THUMB (legacy) -------------------
     async def save_thumb(self, user_id: int, file_id: str) -> bool:
         try:
             result = await self.users.update_one(
@@ -117,6 +119,61 @@ class Techifybots:
             return result.modified_count > 0
         except Exception as e:
             print("Error in clear_thumb:", e)
+            return False
+
+    # ------------------- MULTI-THUMB FUNCTIONS -------------------
+    async def save_named_thumb(self, user_id: int, thumb_name: str, file_id: str) -> bool:
+        """Save a thumbnail with a custom name"""
+        try:
+            result = await self.users.update_one(
+                {"user_id": user_id},
+                {"$set": {f"thumbnails.{thumb_name}": file_id}},
+                upsert=True
+            )
+            if user_id in self.cache:
+                if "thumbnails" not in self.cache[user_id]:
+                    self.cache[user_id]["thumbnails"] = {}
+                self.cache[user_id]["thumbnails"][thumb_name] = file_id
+            return result.modified_count > 0 or result.upserted_id is not None
+        except Exception as e:
+            print("Error in save_named_thumb:", e)
+            return False
+
+    async def get_named_thumbs(self, user_id: int) -> dict[str, str]:
+        """Get all thumbnails {name: file_id}"""
+        try:
+            user = await self.get_user(user_id)
+            return user.get("thumbnails", {}) if user else {}
+        except Exception as e:
+            print("Error in get_named_thumbs:", e)
+            return {}
+
+    async def delete_named_thumb(self, user_id: int, thumb_name: str) -> bool:
+        """Delete a specific named thumbnail"""
+        try:
+            result = await self.users.update_one(
+                {"user_id": user_id},
+                {"$unset": {f"thumbnails.{thumb_name}": ""}}
+            )
+            if user_id in self.cache and "thumbnails" in self.cache[user_id]:
+                self.cache[user_id]["thumbnails"].pop(thumb_name, None)
+            return result.modified_count > 0
+        except Exception as e:
+            print("Error in delete_named_thumb:", e)
+            return False
+
+    async def clear_all_named_thumbs(self, user_id: int) -> bool:
+        """Delete all thumbnails for a user"""
+        try:
+            result = await self.users.update_one(
+                {"user_id": user_id},
+                {"$unset": {"thumbnails": ""}}
+            )
+            if user_id in self.cache and "thumbnails" in self.cache[user_id]:
+                self.cache[user_id]["thumbnails"] = {}
+            return result.modified_count > 0
+        except Exception as e:
+            print("Error in clear_all_named_thumbs:", e)
             return False
 
 # ------------------ INSTANCE ------------------
