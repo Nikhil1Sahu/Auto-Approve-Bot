@@ -2,7 +2,7 @@ import random
 import asyncio
 import os
 from pyrogram import Client, filters, enums
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
+from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup, InputFile
 from config import ADMIN, PICS, LOG_CHANNEL
 from Script import text
 from .db import tb
@@ -22,7 +22,7 @@ async def is_admin(client: Client, message: Message) -> bool:
     except Exception:
         return False
 
-# ------------------ START COMMAND ------------------
+# ------------------ START ------------------
 @Client.on_message(filters.command("start"))
 async def start_cmd(client, message):
     if await tb.get_user(message.from_user.id) is None:
@@ -44,14 +44,14 @@ async def start_cmd(client, message):
         photo=random.choice(PICS),
         caption=text.START.format(message.from_user.mention),
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton('⇆ Add me to your group ⇆', url=f"https://telegram.me/QuickAcceptBot?startgroup=true&admin=invite_users")],
+            [InlineKeyboardButton('⇆ Add me to your group ⇆', url=f"https://t.me/QuickAcceptBot?startgroup=true&admin=invite_users")],
             [InlineKeyboardButton('ℹ️ About', callback_data='about'),
              InlineKeyboardButton('📚 Help', callback_data='help')],
-            [InlineKeyboardButton('⇆ Add me to your channel ⇆', url=f"https://telegram.me/QuickAcceptBot?startchannel=true&admin=invite_users")]
+            [InlineKeyboardButton('⇆ Add me to your channel ⇆', url=f"https://t.me/QuickAcceptBot?startchannel=true&admin=invite_users")]
         ])
     )
 
-# ------------------ HELP COMMAND ------------------
+# ------------------ HELP ------------------
 @Client.on_message(filters.command("help") & filters.private)
 async def help_cmd(client, message):
     reply = await message.reply(
@@ -73,19 +73,22 @@ async def help_cmd(client, message):
 async def set_thumb(client, message: Message):
     if not await is_admin(client, message):
         return await message.reply_text("⚠️ Only admins can use this command")
-    if message.reply_to_message.photo:
-        file_id = message.reply_to_message.photo.file_id
-        try:
-            await tb.save_thumb(message.from_user.id, file_id)
-            await message.reply_text("✅ Thumbnail saved to database")
-        except:
-            # fallback to local storage
-            path = f"thumb_{message.from_user.id}.jpg"
-            await message.reply_to_message.download(file_name=path)
-            user_thumbs[message.from_user.id] = path
-            await message.reply_text("✅ Thumbnail saved locally")
-    else:
-        await message.reply_text("Reply to a photo with /setthumb to save it.")
+    if not message.reply_to_message.photo:
+        return await message.reply_text("Reply to a JPG photo with /setthumb to save it")
+
+    photo = message.reply_to_message.photo
+    if photo.file_size > 200 * 1024:  # 200kb check
+        return await message.reply_text("⚠️ Thumbnail must be less than 200KB")
+
+    file_id = photo.file_id
+    try:
+        await tb.save_thumb(message.from_user.id, file_id)
+        await message.reply_text("✅ Thumbnail saved to database")
+    except:
+        path = f"thumb_{message.from_user.id}.jpg"
+        await message.reply_to_message.download(file_name=path)
+        user_thumbs[message.from_user.id] = path
+        await message.reply_text("✅ Thumbnail saved locally")
 
 # ------------------ CLEAR THUMB ------------------
 @Client.on_message(filters.command("clearthumb"))
@@ -97,7 +100,6 @@ async def clear_thumb(client, message: Message):
         await tb.clear_thumb(user_id)
         await message.reply_text("🗑️ Thumbnail cleared from database")
     except:
-        # fallback local
         if user_id in user_thumbs:
             try:
                 os.remove(user_thumbs[user_id])
@@ -108,46 +110,54 @@ async def clear_thumb(client, message: Message):
         else:
             await message.reply_text("No thumbnail found")
 
-# ------------------ POST COMMAND ------------------
+# ------------------ POST ------------------
 @Client.on_message(filters.command("post"))
 async def post_handler(client, message: Message):
     if not await is_admin(client, message):
         return await message.reply_text("⚠️ Only admins can use this command")
+
     if not message.reply_to_message:
-        return await message.reply_text("Reply to a PDF/text with /post to send it.")
+        return await message.reply_text(
+            "Usage:\n\nReply to a <b>PDF</b> or <b>Text</b> with:\n"
+            "`/post <channel_id>`\n\nExample:\n`/post -1001234567890`",
+            parse_mode="html"
+        )
 
     args = message.text.split(maxsplit=1)
     if len(args) < 2:
-        return await message.reply_text("Usage:\n`/post <channel_id>` (reply to PDF/Text)")
+        return await message.reply_text("⚠️ Provide channel ID\nExample: `/post -1001234567890`")
 
     channel_id = args[1]
     user_id = message.from_user.id
 
-    # try DB thumb first, fallback to local
+    # get thumb
     thumb = None
     try:
         thumb = await tb.get_thumb(user_id)
     except:
         thumb = None
-
     if not thumb and user_id in user_thumbs:
-        from pyrogram.types import InputFile
         thumb = InputFile(user_thumbs[user_id])
 
-    # send PDF or text
     reply_msg = message.reply_to_message
-    if reply_msg.document and reply_msg.document.mime_type == "application/pdf":
-        kwargs = {
-            "chat_id": channel_id,
-            "document": reply_msg.document.file_id,
-            "caption": reply_msg.caption or "📄 PDF File"
-        }
-        if thumb:
-            kwargs["thumb"] = thumb
-        await client.send_document(**kwargs)
-    elif reply_msg.text:
-        await client.send_message(chat_id=channel_id, text=reply_msg.text)
-    else:
-        return await message.reply_text("Reply with a PDF or text to post.")
+    try:
+        if reply_msg.document and reply_msg.document.mime_type == "application/pdf":
+            kwargs = {
+                "chat_id": channel_id,
+                "document": reply_msg.document.file_id,
+                "caption": reply_msg.caption or "📄 PDF File"
+            }
+            if thumb:
+                kwargs["thumb"] = thumb
+            await client.send_document(**kwargs)
 
-    await message.reply_text("✅ Posted successfully!")
+        elif reply_msg.text:
+            await client.send_message(chat_id=channel_id, text=reply_msg.text)
+
+        else:
+            return await message.reply_text("⚠️ Reply must be PDF or text")
+
+        await message.reply_text("✅ Posted successfully!")
+
+    except Exception as e:
+        await message.reply_text(f"❌ Failed to post: {e}")
