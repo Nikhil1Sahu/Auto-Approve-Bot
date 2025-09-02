@@ -5,7 +5,6 @@ from typing import Dict, Any, List
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.types import InputFile
 from config import ADMIN, PICS, LOG_CHANNEL
 from Script import text
 from .db import tb
