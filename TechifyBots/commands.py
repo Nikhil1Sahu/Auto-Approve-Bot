@@ -50,10 +50,10 @@ async def start_cmd(client, message):
         photo=random.choice(PICS),
         caption=text.START.format(message.from_user.mention),
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton('⇆ 𝖠𝖽𝖽 𝖬𝖾 𝖳𝗈 𝖸𝗈𝗎𝗋 𝖦𝗋𝗈𝗎𝗉 ⇆', url=f"https://telegram.me/QuickAcceptBot?startgroup=true&admin=invite_users")],
+            [InlineKeyboardButton('⇆ 𝖠𝖽𝖽 𝖬𝖾 𝖳𝗈 𝖸𝗈𝗎𝗋 𝖦𝗋𝗈𝗎𝗉 ⇆', url=f"https://telegram.me/NG_file_rename_bot?startgroup=true&admin=invite_users")],
             [InlineKeyboardButton('ℹ️ 𝖠𝖻𝗈𝗎𝗍', callback_data='about'),
              InlineKeyboardButton('📚 𝖧𝖾𝗅𝗉', callback_data='help')],
-            [InlineKeyboardButton('⇆ 𝖠𝖽𝖽 𝖬𝖾 𝖳𝗈 𝖸𝗈𝗎𝗋 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 ⇆', url=f"https://telegram.me/QuickAcceptBot?startchannel=true&admin=invite_users")]
+            [InlineKeyboardButton('⇆ 𝖠𝖽𝖽 𝖬𝖾 𝖳𝗈 𝖸𝗈𝗎𝗋 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 ⇆', url=f"https://telegram.me/NG_file_rename_bot?startchannel=true&admin=invite_users")]
         ])
     )
 
@@ -65,7 +65,7 @@ async def help_cmd(client, message):
         text=("❓ <b>𝘏𝘢𝘷𝘪𝘯𝘨 𝘛𝘳𝘰𝘶𝘣𝘭𝘦?</b>\n\n𝘐𝘧 𝘺𝘰𝘶'𝘳𝘦 𝘧𝘢𝘤𝘪𝘯𝘨 𝘢𝘯𝘺 𝘱𝘳𝘰𝘣𝘭𝘦𝘮 𝘸𝘩𝘪𝘭𝘦 𝘶𝘴𝘪𝘯𝘨 𝘵𝘩𝘦 𝘣𝘰𝘵 𝘰𝘳 𝘪𝘵𝘴 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴, 𝘱𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘵𝘤𝘩 𝘵𝘩𝘦 𝘵𝘶𝘵𝘰𝘳𝘪𝘢𝘭 𝘷𝘪𝘥𝘦𝘰 𝘣𝘦𝘭𝘰𝘸.\n\n🎥 𝘛𝘩𝘦 𝘷𝘪𝘥𝘦𝘰 𝘸𝘪𝘭𝘭 𝘤𝘭𝘦𝘢𝘳𝘭𝘺 𝘦𝘹𝘱𝘭𝘢𝘪𝘯 𝘩𝘰𝘸 𝘵𝘰 𝘶𝘴𝘦 𝘦𝘢𝘤𝘩 𝘧𝘦𝘢𝘵𝘶𝘳𝘦 𝘸𝘪𝘵𝘩 𝘦𝘢𝘴𝘦.\n\n💖 𝘍𝘰𝘳 𝘮𝘰𝘳𝘦 𝘶𝘱𝘥𝘢𝘵𝘦𝘴 — <b><a href='https://techifybots.github.io/PayWeb/'>𝘚𝘶𝘱𝘱𝘰𝘳𝘵 𝘜𝘴.</a></b>"
         ),
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎬 𝘞𝘢𝘵𝘤𝘩 𝘛𝘶𝘵𝘰𝘳𝘪𝘢𝘭", url="https://youtu.be/_n3V0gFZMh8")]
+            [InlineKeyboardButton("🎬 𝘞𝘢𝘵𝘤𝘩 𝘛𝘶𝘵𝘰𝘳𝘪𝘢𝘭", url="https://youtube.com/@CodeByJerry")]
         ])
     )
     await asyncio.sleep(300)
@@ -100,6 +100,30 @@ async def approve_new(client, m):
         print(f"[AutoApproveError] {e}")
         pass
 
+# --------------- /addchannel command ---------------
+@Client.on_message(filters.command("addchannel") & filters.user([ADMIN]))
+async def add_channel_cmd(client: Client, message: Message):
+    # Ask admin to forward a message from the channel
+    prompt = await message.reply(
+        "📌 Forward a message from the channel you want to register"
+    )
+
+    try:
+        fwd_msg = await client.listen(message.chat.id)  # wait for the forwarded message
+    except Exception as e:
+        return await prompt.edit(f"⚠️ Error: {str(e)}")
+
+    if fwd_msg.forward_from_chat and fwd_msg.forward_from_chat.type == enums.ChatType.CHANNEL:
+        chat_id = fwd_msg.forward_from_chat.id
+        title = fwd_msg.forward_from_chat.title
+
+        # Save to DB
+        await tb.add_channel(chat_id, title)
+        await prompt.edit(f"✅ Channel **{title}** registered successfully!")
+    else:
+        await prompt.edit("⚠️ Forwarded message is not from a valid channel.")
+
+
 # --------------- /post command ---------------
 @Client.on_message(filters.command("post") & filters.user([ADMIN]))
 async def start_post(client: Client, message: Message):
@@ -108,7 +132,7 @@ async def start_post(client: Client, message: Message):
     # Fetch allowed channels from DB
     channels = await tb.get_channels()
     if not channels:
-        return await message.reply("⚠️ No channels registered. Please add channels first.")
+        return await message.reply("⚠️ No channels registered. Please add channels first by /addchannel.")
 
     # Build channel selection buttons
     keyboard = [
