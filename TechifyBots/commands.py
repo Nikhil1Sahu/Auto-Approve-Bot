@@ -4,7 +4,7 @@ from pyrogram.errors import FloodWait
 import asyncio
 import os
 
-from db import tb  # Techifybots instance
+from TechifyBots.db import tb  # Techifybots instance
 
 # Temporary in-memory storage for post workflow
 post_sessions = {}  # {admin_id: {"channel": id, "messages": [], "step": str, "set_thumb": bool, "time": float}}
