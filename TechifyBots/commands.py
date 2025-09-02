@@ -1,11 +1,12 @@
 import os
 import random
 import asyncio
+import contextlib
 from typing import Dict, Any, List
 
 from pyrogram import Client, filters, enums
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram import InputFile
+
 from config import ADMIN, PICS, LOG_CHANNEL
 from Script import text
 from .db import tb
@@ -28,7 +29,7 @@ def kb(rows: List[List[Any]]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(rows)
 
 # ------------------ START ------------------
-@Client.on_message(filters.command("start"))
+@Client.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message: Message):
     if await tb.get_user(message.from_user.id) is None:
         await tb.add_user(message.from_user.id, message.from_user.first_name)
@@ -49,10 +50,12 @@ async def start_cmd(client, message: Message):
         photo=random.choice(PICS),
         caption=text.START.format(message.from_user.mention),
         reply_markup=kb([
-            [InlineKeyboardButton('⇆ Add me to your group ⇆', url="https://telegram.me/QuickAcceptBot?startgroup=true&admin=invite_users")],
+            [InlineKeyboardButton('⇆ Add me to your group ⇆',
+                                  url="https://telegram.me/QuickAcceptBot?startgroup=true&admin=invite_users")],
             [InlineKeyboardButton('ℹ️ About', callback_data='about'),
              InlineKeyboardButton('📚 Help', callback_data='help')],
-            [InlineKeyboardButton('⇆ Add me to your channel ⇆', url="https://telegram.me/QuickAcceptBot?startchannel=true&admin=invite_users")]
+            [InlineKeyboardButton('⇆ Add me to your channel ⇆',
+                                  url="https://telegram.me/QuickAcceptBot?startchannel=true&admin=invite_users")]
         ])
     )
 
@@ -71,86 +74,36 @@ async def help_cmd(client, message: Message):
         await reply.delete()
         await message.delete()
 
-# ------------------ /setthumb ------------------
-# Usage: reply to a JPEG photo with /setthumb <name>
-import contextlib
-
+# ------------------ Global Thumbnail ------------------
 @Client.on_message(filters.command("setthumb") & filters.private)
 async def set_thumb(client: Client, message: Message):
     if not await ensure_admin(client, message):
         return
 
-    parts = message.text.split(maxsplit=1)
-    thumb_name = parts[1].strip() if len(parts) > 1 else None
-    replied = message.reply_to_message
+    if not message.reply_to_message or not message.reply_to_message.photo:
+        return await message.reply_text("Reply to a photo with /setthumb to set it as the global thumbnail.")
 
-    if not thumb_name or not replied or not replied.photo:
-        return await message.reply_text(
-            "Tag a photo. It must be in JPEG format, be under 200 KB in size, and not exceed 320 pixels in width or height."
-        )
+    photo = message.reply_to_message.photo
 
-    p = replied.photo  # Telegram photos are JPEG
-    width = getattr(p, "width", 0) or 0
-    height = getattr(p, "height", 0) or 0
-    size_bytes = getattr(p, "file_size", 0) or 0
-    mime = "image/jpeg"  # Telegram photos are JPEG
-
-    if not (mime == "image/jpeg" and size_bytes < 200 * 1024 and width <= 320 and height <= 320):
-        return await message.reply_text(
-            "❌ Failed — photo must be in JPEG format, be under 200 KB in size, and not exceed 320 pixels in width or height."
-        )
-
+    # save in DB with fixed key "global_thumb"
     meta = {
-        "file_id": p.file_id,
-        "mime": mime,
-        "width": width,
-        "height": height,
-        "size_bytes": size_bytes
+        "file_id": photo.file_id,
+        "mime": "image/jpeg",
+        "width": getattr(photo, "width", 0),
+        "height": getattr(photo, "height", 0),
+        "size_bytes": getattr(photo, "file_size", 0)
     }
-    await tb.save_named_thumb(message.from_user.id, thumb_name, meta)
-    await message.reply_text("Thumbnail name saved successfully.")
+    await tb.save_named_thumb(message.from_user.id, "global_thumb", meta)
 
-# ------------------ /thumbnails ------------------
-@Client.on_message(filters.command("thumbnails") & filters.private)
-async def thumbnails_cmd(client: Client, message: Message):
+    await message.reply_text("✅ Global thumbnail saved successfully.")
+
+@Client.on_message(filters.command("delthumb") & filters.private)
+async def del_thumb(client: Client, message: Message):
     if not await ensure_admin(client, message):
         return
 
-    thumbs = await tb.list_named_thumbs(message.from_user.id)
-    if not thumbs:
-        return await message.reply_text("No thumbnails found.")
-
-    rows = []
-    for t in thumbs:
-        rows.append([InlineKeyboardButton(t["name"], callback_data=f"thumb:view:{t['name']}")])
-    await message.reply_text("Saved thumbnails:", reply_markup=kb(rows))
-
-# ------------------ /clearthumb ------------------
-@Client.on_message(filters.command("clearthumb") & filters.private)
-async def clearthumb_cmd(client: Client, message: Message):
-    if not await ensure_admin(client, message):
-        return
-
-    parts = message.text.split(maxsplit=1)
-    thumbs = await tb.list_named_thumbs(message.from_user.id)
-
-    if len(parts) == 1:
-        if not thumbs:
-            return await message.reply_text("No thumbnails found.")
-        rows = [[InlineKeyboardButton(t["name"], callback_data=f"clearthumb:ask:{t['name']}")] for t in thumbs]
-        return await message.reply_text("Choose which thumbnail you want to delete.", reply_markup=kb(rows))
-
-    # /clearthumb <name> -> ask confirm
-    name = parts[1].strip()
-    if not any(t["name"] == name for t in thumbs):
-        return await message.reply_text("Thumbnail not found.")
-    await message.reply_text(
-        "Do you really want to delete this thumbnail?",
-        reply_markup=kb([
-            [InlineKeyboardButton("Yes", callback_data=f"clearthumb:yes:{name}"),
-             InlineKeyboardButton("No", callback_data=f"clearthumb:no:{name}")]
-        ])
-    )
+    await tb.delete_named_thumb(message.from_user.id, "global_thumb")
+    await message.reply_text("🗑️ Global thumbnail removed.")
 
 # ------------------ /post (entry) ------------------
 @Client.on_message(filters.command("post") & filters.private)
@@ -158,30 +111,27 @@ async def post_entry(client: Client, message: Message):
     if not await ensure_admin(client, message):
         return
 
-    # Stage A — list channels the bot knows (registry)
     chans = await tb.list_channels()
     if not chans:
         return await message.reply_text("Make the bot an admin in the channel where you want to post.")
 
-    # init session
     session = {
         "stage": "channels",
         "channel_id": None,
-        "items": [],               # will hold dicts
-        "pdf_thumb_name": None
+        "items": []
     }
     await tb.set_session(message.from_user.id, session)
 
     rows = [[InlineKeyboardButton(c["title"], callback_data=f"post:chan:{c['chat_id']}")] for c in chans]
     await message.reply_text("Select a channel to post:", reply_markup=kb(rows))
 
-# ------------------ Collector while in stage=collect ------------------
-@Client.on_message(filters.private & ~filters.command(["start", "help", "setthumb", "thumbnails", "clearthumb", "post"]))
+# ------------------ Collector ------------------
+@Client.on_message(filters.private & ~filters.command(["start", "help", "setthumb", "delthumb", "post"]))
 async def collect_items(client: Client, message: Message):
     uid = message.from_user.id
     session = await tb.get_session(uid)
     if not session or session.get("stage") != "collect":
-        return  # ignore normal chat
+        return
 
     item: Dict[str, Any] | None = None
 
@@ -217,12 +167,12 @@ async def collect_items(client: Client, message: Message):
         ])
     )
 
-# ------------------ Fallback unknown command ------------------
-@Client.on_message(filters.command & filters.private)
+# ------------------ Unknown Command ------------------
+@Client.on_message(filters.command(["start", "help", "setthumb", "delthumb", "post"]) & filters.private)
+async def known_commands(client, message: Message):
+    # do nothing, handled above
+    return
+
+@Client.on_message(filters.command() & filters.private)
 async def unknown_command(client: Client, message: Message):
-    # allow known commands to pass
-    known = {"start", "help", "setthumb", "thumbnails", "clearthumb", "post"}
-    if message.command and message.command[0].lower() in known:
-        return
-    # show same text for everyone per spec
     await message.reply_text(ADMIN_ONLY_TEXT)
