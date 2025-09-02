@@ -174,16 +174,16 @@ async def select_channel(client, callback_query):
 
 
 # --------------- Collect messages ---------------
-@Client.on_message(filters.user([ADMIN]) & ~filters.command("post"))
+@Client.on_message(filters.user([ADMIN]))
 async def collect_post_content(client, message: Message):
     admin_id = message.from_user.id
 
     # check session active
     session = post_sessions.get(admin_id)
     if not session or session["step"] != "collecting":
-        return
+        return  # ignore if no active session
 
-    # Save message reference
+    # Save message reference (works for text, photo, video, document, etc.)
     session["messages"].append(message)
 
     # Show add/continue buttons
@@ -193,6 +193,7 @@ async def collect_post_content(client, message: Message):
         [InlineKeyboardButton("❌ Cancel", callback_data="post_cancel")]
     ]
     await message.reply("Message added to post.", reply_markup=InlineKeyboardMarkup(keyboard))
+
 
 
 # --------------- Add more ---------------
