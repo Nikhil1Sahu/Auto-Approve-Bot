@@ -3,7 +3,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message
 from pyrogram.errors import FloodWait
 import asyncio
 import os
-
+from config import ADMIN
 from TechifyBots.db import tb  # Techifybots instance
 
 # Temporary in-memory storage for post workflow
@@ -27,7 +27,7 @@ async def safe_send(client, func, *args, **kwargs):
 
 
 # --------------- /post command ---------------
-@Client.on_message(filters.command("post") & filters.user([YOUR_ADMIN_ID]))
+@Client.on_message(filters.command("post") & filters.user([ADMIN]))
 async def start_post(client: Client, message: Message):
     admin_id = message.from_user.id
 
@@ -68,7 +68,7 @@ async def select_channel(client, callback_query):
 
 
 # --------------- Collect messages ---------------
-@Client.on_message(filters.user([YOUR_ADMIN_ID]) & ~filters.command("post"))
+@Client.on_message(filters.user([ADMIN]) & ~filters.command("post"))
 async def collect_post_content(client, message: Message):
     admin_id = message.from_user.id
 
