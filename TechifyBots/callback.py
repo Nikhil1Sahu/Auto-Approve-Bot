@@ -2,7 +2,8 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from Script import text
 from config import ADMIN
-from db import tb  # our Techifybots instance
+from TechifyBots.db import tb
+  # our Techifybots instance
 
 
 @Client.on_callback_query()

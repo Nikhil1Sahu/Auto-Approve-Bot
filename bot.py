@@ -9,7 +9,7 @@ routes = web.RouteTableDef()
 
 @routes.get("/", allow_head=True)
 async def root_route(request):
-    return web.Response(text="<h3 align='center'><b>I am Alive</b></h3>", content_type='text/html')
+    return web.Response(text="<h3 align='center'><b>I am Alive</b></h3>", content_type='text/HTML')
 
 async def web_server():
     app = web.Application(client_max_size=30_000_000)
@@ -61,6 +61,6 @@ class Bot(Client):
 
     async def stop(self, *args):
         await super().stop()
-        print(f"{me.first_name} Bot stopped.")
+        print(f"{self.me.first_name} Bot stopped.")
 
 Bot().run()
