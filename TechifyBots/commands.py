@@ -15,7 +15,6 @@ post_sessions = {}  # {admin_id: {"channel": id, "messages": [], "step": str, "s
 # Auto-expire sessions after X minutes
 SESSION_TIMEOUT = 600  # 10 min
 
-
 # --------------- FloodWait safe sender ---------------
 async def safe_send(client, func, *args, **kwargs):
     while True:
@@ -27,7 +26,6 @@ async def safe_send(client, func, *args, **kwargs):
         except Exception as ex:
             print(f"[SendError] {ex}")
             return None
-
 
 # --------------- /start command ---------------
 @Client.on_message(filters.command("start"))
@@ -57,7 +55,6 @@ async def start_cmd(client, message):
         ])
     )
 
-
 # --------------- /help command ---------------
 @Client.on_message(filters.command("help") & filters.private)
 async def help_cmd(client, message):
@@ -83,21 +80,17 @@ async def help_cmd(client, message):
     except:
         pass
 
-
 # --------------- /accept command (simplified) ---------------
 @Client.on_message(filters.command('accept') & filters.private)
 async def accept(client, message: Message):
-    # Just inform the admin that auto-approve is active
     await message.reply("✅ Auto-approve is active. All new join requests will be accepted automatically.")
 
 # --------------- Auto-approve new requests ---------------
 @Client.on_chat_join_request()
 async def approve_new(client, m):
     try:
-        # Approve every join request automatically
         await client.approve_chat_join_request(m.chat.id, m.from_user.id)
         try:
-            # Optional: notify the user
             await client.send_message(
                 m.from_user.id,
                 f"{m.from_user.mention},\n\nYour request to join {m.chat.title} has been approved ✅"
@@ -108,85 +101,61 @@ async def approve_new(client, m):
         print(f"[AutoApproveError] {e}")
         pass
 
-# --------------- /addchannel command ---------------
+# --------------- /addchannel command --------------------
 @Client.on_message(filters.command("addchannel") & filters.user([ADMIN]))
 async def add_channel_cmd(client: Client, message: Message):
-    # Ask admin to forward a message from the channel
-    prompt = await message.reply(
-        "📌 Forward a message from the channel you want to register"
-    )
+    post_sessions[message.from_user.id] = {"step": "await_channel"}
+    await message.reply("📌 Forward a message from the channel you want to register")
 
-    try:
-        fwd_msg = await client.listen(message.chat.id)  # wait for the forwarded message
-    except Exception as e:
-        return await prompt.edit(f"⚠️ Error: {str(e)}")
+# --------------- Catch forwarded channel message --------------------
+@Client.on_message(filters.user([ADMIN]))
+async def catch_forwarded_channel(client: Client, message: Message):
+    session = post_sessions.get(message.from_user.id)
+    if not session or session.get("step") != "await_channel":
+        return
 
-    if fwd_msg.forward_from_chat and fwd_msg.forward_from_chat.type == enums.ChatType.CHANNEL:
-        chat_id = fwd_msg.forward_from_chat.id
-        title = fwd_msg.forward_from_chat.title
-
-        # Save to DB
+    fwd_chat = getattr(message, "forward_from_chat", None)
+    if fwd_chat and fwd_chat.type == enums.ChatType.CHANNEL:
+        chat_id = fwd_chat.id
+        title = fwd_chat.title
         await tb.add_channel(chat_id, title)
-        await prompt.edit(f"✅ Channel **{title}** registered successfully!")
+        await message.reply(f"✅ Channel **{title}** registered successfully!")
     else:
-        await prompt.edit("⚠️ Forwarded message is not from a valid channel.")
+        await message.reply("⚠️ Forwarded message is not from a valid channel.")
 
+    post_sessions.pop(message.from_user.id, None)
 
 # --------------- /post command ---------------
 @Client.on_message(filters.command("post") & filters.user([ADMIN]))
 async def start_post(client: Client, message: Message):
     admin_id = message.from_user.id
-
-    # Fetch allowed channels from DB
     channels = await tb.get_channels()
     if not channels:
         return await message.reply("⚠️ No channels registered. Please add channels first by /addchannel.")
 
-    # Build channel selection buttons
-    keyboard = [
-        [InlineKeyboardButton(c["title"], callback_data=f"post_channel:{c['chat_id']}")]
-        for c in channels
-    ]
-    await message.reply(
-        "📢 Select a channel to post in:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
+    keyboard = [[InlineKeyboardButton(c["title"], callback_data=f"post_channel:{c['chat_id']}")] for c in channels]
+    await message.reply("📢 Select a channel to post in:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 # --------------- Handle channel selection ---------------
 @Client.on_callback_query(filters.regex(r"^post_channel:(-?\d+)$"))
 async def select_channel(client, callback_query):
     admin_id = callback_query.from_user.id
     channel_id = int(callback_query.data.split(":")[1])
+    post_sessions[admin_id] = {"channel": channel_id, "messages": [], "step": "collecting", "set_thumb": False, "time": asyncio.get_event_loop().time()}
+    await callback_query.message.edit_text("✅ Channel selected!\n\nNow send me one or multiple messages you want to include in the post.")
 
-    # Init session
-    post_sessions[admin_id] = {
-        "channel": channel_id,
-        "messages": [],
-        "step": "collecting",
-        "set_thumb": False,
-        "time": asyncio.get_event_loop().time()
-    }
-
-    await callback_query.message.edit_text(
-        "✅ Channel selected!\n\nNow send me one or multiple messages you want to include in the post."
-    )
-
-
-# --------------- Collect messages ---------------
-@Client.on_message(filters.user([ADMIN]))
+# --------------- Collect messages for /post command ---------------
+@Client.on_message(
+    filters.user([ADMIN]) &
+    (filters.text | filters.photo | filters.video | filters.document | filters.sticker)
+)
 async def collect_post_content(client, message: Message):
     admin_id = message.from_user.id
-
-    # check session active
     session = post_sessions.get(admin_id)
-    if not session or session["step"] != "collecting":
-        return  # ignore if no active session
+    if not session or session.get("step") != "collecting":
+        return
 
-    # Save message reference (works for text, photo, video, document, etc.)
     session["messages"].append(message)
-
-    # Show add/continue buttons
     keyboard = [
         [InlineKeyboardButton("➕ Add more", callback_data="post_add")],
         [InlineKeyboardButton("✅ Continue", callback_data="post_continue")],
@@ -194,56 +163,40 @@ async def collect_post_content(client, message: Message):
     ]
     await message.reply("Message added to post.", reply_markup=InlineKeyboardMarkup(keyboard))
 
-
-
 # --------------- Add more ---------------
 @Client.on_callback_query(filters.regex(r"^post_add$"))
 async def add_more(client, callback_query):
     await callback_query.message.edit_text("📩 Send me more messages to include in the post.")
-
 
 # --------------- Continue (check for PDFs) ---------------
 @Client.on_callback_query(filters.regex(r"^post_continue$"))
 async def continue_post(client, callback_query):
     admin_id = callback_query.from_user.id
     session = post_sessions.get(admin_id)
-
     if not session:
         return await callback_query.answer("Session expired.", show_alert=True)
 
-    # Detect any PDF documents
-    has_pdf = any(
-        getattr(msg, "document", None) and msg.document.mime_type == "application/pdf"
-        for msg in session["messages"]
-    )
-
+    has_pdf = any(getattr(msg, "document", None) and msg.document.mime_type == "application/pdf" for msg in session["messages"])
     if has_pdf:
         keyboard = [
             [InlineKeyboardButton("🖼️ Set thumb", callback_data="post_set_thumb")],
             [InlineKeyboardButton("✅ Continue", callback_data="post_ready")],
             [InlineKeyboardButton("❌ Cancel", callback_data="post_cancel")]
         ]
-        await callback_query.message.edit_text(
-            "📂 I detected PDF(s) in your post.\nDo you want to apply the global thumbnail?",
-            reply_markup=InlineKeyboardMarkup(keyboard)
-        )
+        await callback_query.message.edit_text("📂 I detected PDF(s) in your post.\nDo you want to apply the global thumbnail?", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         await show_ready_page(callback_query.message, admin_id)
-
 
 # --------------- Set thumbnail ---------------
 @Client.on_callback_query(filters.regex(r"^post_set_thumb$"))
 async def set_thumb(client, callback_query):
     admin_id = callback_query.from_user.id
     session = post_sessions.get(admin_id)
-
     if not session:
         return await callback_query.answer("Session expired.", show_alert=True)
 
-    # Mark that global thumb should be applied
     session["set_thumb"] = True
     await show_ready_page(callback_query.message, admin_id)
-
 
 # --------------- Ready page ---------------
 async def show_ready_page(message, admin_id):
@@ -254,7 +207,6 @@ async def show_ready_page(message, admin_id):
     ]
     await message.edit_text("✅ Post is ready to publish!", reply_markup=InlineKeyboardMarkup(keyboard))
 
-
 # --------------- Cancel ---------------
 @Client.on_callback_query(filters.regex(r"^post_cancel$"))
 async def cancel_post(client, callback_query):
@@ -262,38 +214,28 @@ async def cancel_post(client, callback_query):
     post_sessions.pop(admin_id, None)
     await callback_query.message.edit_text("❌ Post creation cancelled.")
 
-
 # --------------- Send post ---------------
 @Client.on_callback_query(filters.regex(r"^post_send$"))
 async def send_post(client, callback_query):
     admin_id = callback_query.from_user.id
     session = post_sessions.get(admin_id)
-
     if not session:
         return await callback_query.answer("Session expired.", show_alert=True)
 
     channel_id = session["channel"]
-
     for msg in session["messages"]:
         try:
             if getattr(msg, "document", None) and msg.document.mime_type == "application/pdf":
-                thumb_path = None
-                if session.get("set_thumb"):
-                    thumb_path = await tb.get_global_thumb()
-                await safe_send(
-                    client,
-                    client.send_document,
-                    chat_id=channel_id,
-                    document=msg.document.file_id,
-                    caption=msg.caption or "",
-                    thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None
-                )
+                thumb_path = await tb.get_global_thumb() if session.get("set_thumb") else None
+                await safe_send(client, client.send_document, chat_id=channel_id, document=msg.document.file_id, caption=msg.caption or "", thumb=thumb_path if thumb_path and os.path.exists(thumb_path) else None)
             elif getattr(msg, "photo", None):
                 await safe_send(client, client.send_photo, chat_id=channel_id, photo=msg.photo.file_id, caption=msg.caption or "")
             elif getattr(msg, "video", None):
                 await safe_send(client, client.send_video, chat_id=channel_id, video=msg.video.file_id, caption=msg.caption or "")
             elif getattr(msg, "text", None):
                 await safe_send(client, client.send_message, chat_id=channel_id, text=msg.text)
+            elif getattr(msg, "sticker", None):
+                await safe_send(client, client.send_sticker, chat_id=channel_id, sticker=msg.sticker.file_id)
         except Exception as ex:
             print(f"[PostError] {ex}")
 
