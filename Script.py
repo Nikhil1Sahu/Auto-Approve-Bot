@@ -30,10 +30,13 @@ Here’s how to use me effectively:
 1. **To approve new join requests**  
    - Add me as admin in your channel/group with permission to add new members.
 
-2. **To accept pending join requests**  
-   - Use `/login` after being made admin.  
-   - Then `/accept` to approve any pending requests.  
-   - Use `/logout` to exit.
+2. **To accept pending join requests and post**  
+   
+• /start - Start the bot and see main options
+• /help - Show this help message
+• /accept - Enable auto-approve for new join requests
+• /post - Create and publish posts to your channels
+• /addchannel - Register a new channel to allow posting
 
 3. **To cancel an ongoing process**, use `/cancel`.
 
