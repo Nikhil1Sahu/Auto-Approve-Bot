@@ -2,7 +2,7 @@ from pyrogram import Client
 from pyrogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from Script import text
 from config import ADMIN
-from db import tb
+from TechifyBots.db import tb
 import os
 
 THUMB_PATH = os.path.join("assets", "thumb.jpg")
