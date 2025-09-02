@@ -62,10 +62,18 @@ async def start_cmd(client, message):
 @Client.on_message(filters.command("help") & filters.private)
 async def help_cmd(client, message):
     reply = await message.reply(
-        text=("❓ <b>𝘏𝘢𝘷𝘪𝘯𝘨 𝘛𝘳𝘰𝘶𝘣𝘭𝘦?</b>\n\n𝘐𝘧 𝘺𝘰𝘶'𝘳𝘦 𝘧𝘢𝘤𝘪𝘯𝘨 𝘢𝘯𝘺 𝘱𝘳𝘰𝘣𝘭𝘦𝘮 𝘸𝘩𝘪𝘭𝘦 𝘶𝘴𝘪𝘯𝘨 𝘵𝘩𝘦 𝘣𝘰𝘵 𝘰𝘳 𝘪𝘵𝘴 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴, 𝘱𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘵𝘤𝘩 𝘵𝘩𝘦 𝘵𝘶𝘵𝘰𝘳𝘪𝘢𝘭 𝘷𝘪𝘥𝘦𝘰 𝘣𝘦𝘭𝘰𝘸.\n\n🎥 𝘛𝘩𝘦 𝘷𝘪𝘥𝘦𝘰 𝘸𝘪𝘭𝘭 𝘤𝘭𝘦𝘢𝘳𝘭𝘺 𝘦𝘹𝘱𝘭𝘢𝘪𝘯 𝘩𝘰𝘸 𝘵𝘰 𝘶𝘴𝘦 𝘦𝘢𝘤𝘩 𝘧𝘦𝘢𝘵𝘶𝘳𝘦 𝘸𝘪𝘵𝘩 𝘦𝘢𝘴𝘦.\n\n💖 𝘍𝘰𝘳 𝘮𝘰𝘳𝘦 𝘶𝘱𝘥𝘢𝘵𝘦𝘴 — <b><a href='https://techifybots.github.io/PayWeb/'>𝘚𝘶𝘱𝘱𝘰𝘳𝘵 𝘜𝘴.</a></b>"
+        text=(
+            "❓ <b>Bot Commands Guide</b>\n\n"
+            "Here’s a list of all available commands and what they do:\n\n"
+            "• /start - Start the bot and see main options\n"
+            "• /help - Show this help message\n"
+            "• /accept - Enable auto-approve for new join requests\n"
+            "• /post - Create and publish posts to your channels\n"
+            "• /addchannel - Register a new channel to allow posting\n\n"
+            "💖 For more updates — <b><a href='https://t.me/shadow_core_chat'>Support Us</a></b>"
         ),
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎬 𝘞𝘢𝘵𝘤𝘩 𝘛𝘶𝘵𝘰𝘳𝘪𝘢𝘭", url="https://youtube.com/@CodeByJerry")]
+            [InlineKeyboardButton("🎬 Watch Tutorial", url="https://youtube.com/@CodeByJerry")]
         ])
     )
     await asyncio.sleep(300)
