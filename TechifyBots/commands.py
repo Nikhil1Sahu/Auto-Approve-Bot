@@ -1,55 +1,15 @@
-import os
 import random
-import asyncio
-import contextlib
-from typing import Dict, Any, List, Optional
-
 from pyrogram import Client, filters, enums
+from pyrogram.errors import *
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from config import ADMIN, PICS, LOG_CHANNEL
+from config import *
+import asyncio
 from Script import text
 from .db import tb
 from .fsub import get_fsub
 
-# ------------------ Helpers ------------------
-ADMIN_ONLY_TEXT = "❌ This command doesn't exist"
-
-# special key under ADMIN to store the single global PDF thumb
-GLOBAL_PDF_THUMB_KEY = "__GLOBAL_PDF_THUMB__"
-
-def is_admin_id(uid: int) -> bool:
-    return uid == ADMIN
-
-async def ensure_admin(client: Client, message: Message) -> bool:
-    if is_admin_id(message.from_user.id):
-        return True
-    # Non-admins always see “doesn't exist” for admin commands
-    await message.reply_text(ADMIN_ONLY_TEXT)
-    return False
-
-def kb(rows: List[List[Any]]) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(rows)
-
-async def _get_global_pdf_thumb_file_id() -> Optional[str]:
-    """
-    Read the globally saved thumbnail (stored under ADMIN with a special name)
-    and return its file_id if present. Works with list_named_thumbs()’s shape.
-    """
-    try:
-        thumbs = await tb.list_named_thumbs(ADMIN)  # expected: list of dicts
-    except Exception:
-        return None
-
-    for t in thumbs or []:
-        if t.get("name") == GLOBAL_PDF_THUMB_KEY:
-            # t may be {"name":..., "meta": {...}} or {"name":..., "file_id": ...}
-            meta = t.get("meta", {})
-            return meta.get("file_id") or t.get("file_id")
-    return None
-
-# ------------------ START ------------------
 @Client.on_message(filters.command("start"))
-async def start_cmd(client, message: Message):
+async def start_cmd(client, message):
     if await tb.get_user(message.from_user.id) is None:
         await tb.add_user(message.from_user.id, message.from_user.first_name)
         bot = await client.get_me()
@@ -63,191 +23,81 @@ async def start_cmd(client, message: Message):
                 bot.username
             )
         )
-    if await get_fsub(client, message) is False:
-        return
+    if IS_FSUB and not await get_fsub(client, message): return
     await message.reply_photo(
         photo=random.choice(PICS),
         caption=text.START.format(message.from_user.mention),
-        reply_markup=kb([
-            [InlineKeyboardButton('⇆ Add me to your group ⇆', url="https://telegram.me/QuickAcceptBot?startgroup=true&admin=invite_users")],
-            [InlineKeyboardButton('ℹ️ About', callback_data='about'),
-             InlineKeyboardButton('📚 Help', callback_data='help')],
-            [InlineKeyboardButton('⇆ Add me to your channel ⇆', url="https://telegram.me/QuickAcceptBot?startchannel=true&admin=invite_users")]
-        ])
-    )
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton('⇆ 𝖠𝖽𝖽 𝖬𝖾 𝖳𝗈 𝖸𝗈𝗎𝗋 𝖦𝗋𝗈𝗎𝗉 ⇆', url=f"https://telegram.me/QuickAcceptBot?startgroup=true&admin=invite_users")],
+            [InlineKeyboardButton('ℹ️ 𝖠𝖻𝗈𝗎𝗍', callback_data='about'),
+             InlineKeyboardButton('📚 𝖧𝖾𝗅𝗉', callback_data='help')],
+            [InlineKeyboardButton('⇆ 𝖠𝖽𝖽 𝖬𝖾 𝖳𝗈 𝖸𝗈𝗎𝗋 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 ⇆', url=f"https://telegram.me/QuickAcceptBot?startchannel=true&admin=invite_users")]
+            ])
+        )
 
-# ------------------ HELP ------------------
 @Client.on_message(filters.command("help") & filters.private)
-async def help_cmd(client, message: Message):
+async def help_cmd(client, message):
     reply = await message.reply(
-        text=("❓ <b>Having Trouble?</b>\n\n"
-              "Watch the tutorial video to understand features clearly."),
-        reply_markup=kb([
-            [InlineKeyboardButton("🎬 Watch Tutorial", url="https://youtu.be/_n3V0gFZMh8")],
+        text=("❓ <b>𝘏𝘢𝘷𝘪𝘯𝘨 𝘛𝘳𝘰𝘶𝘣𝘭𝘦?</b>\n\n𝘐𝘧 𝘺𝘰𝘶'𝘳𝘦 𝘧𝘢𝘤𝘪𝘯𝘨 𝘢𝘯𝘺 𝘱𝘳𝘰𝘣𝘭𝘦𝘮 𝘸𝘩𝘪𝘭𝘦 𝘶𝘴𝘪𝘯𝘨 𝘵𝘩𝘦 𝘣𝘰𝘵 𝘰𝘳 𝘪𝘵𝘴 𝘤𝘰𝘮𝘮𝘢𝘯𝘥𝘴, 𝘱𝘭𝘦𝘢𝘴𝘦 𝘸𝘢𝘵𝘤𝘩 𝘵𝘩𝘦 𝘵𝘶𝘵𝘰𝘳𝘪𝘢𝘭 𝘷𝘪𝘥𝘦𝘰 𝘣𝘦𝘭𝘰𝘸.\n\n🎥 𝘛𝘩𝘦 𝘷𝘪𝘥𝘦𝘰 𝘸𝘪𝘭𝘭 𝘤𝘭𝘦𝘢𝘳𝘭𝘺 𝘦𝘹𝘱𝘭𝘢𝘪𝘯 𝘩𝘰𝘸 𝘵𝘰 𝘶𝘴𝘦 𝘦𝘢𝘤𝘩 𝘧𝘦𝘢𝘵𝘶𝘳𝘦 𝘸𝘪𝘵𝘩 𝘦𝘢𝘴𝘦.\n\n💖 𝘍𝘰𝘳 𝘮𝘰𝘳𝘦 𝘶𝘱𝘥𝘢𝘵𝘦𝘴 — <b><a href='https://techifybots.github.io/PayWeb/'>𝘚𝘶𝘱𝘱𝘰𝘳𝘵 𝘜𝘴.</a></b>"
+        ),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎬 𝘞𝘢𝘵𝘤𝘩 𝘛𝘶𝘵𝘰𝘳𝘪𝘢𝘭", url="https://youtu.be/_n3V0gFZMh8")]
         ])
     )
     await asyncio.sleep(300)
-    with contextlib.suppress(Exception):
-        await reply.delete()
+    await reply.delete()
+    try:
         await message.delete()
+    except:
+        pass
 
-# ------------------ /setthumb ------------------
-# New behavior: reply to a JPEG photo with /setthumb (no name needed).
-# Saves ONE GLOBAL thumbnail for all PDFs (stored under ADMIN + special key).
-@Client.on_message(filters.command("setthumb") & filters.private)
-async def set_thumb(client: Client, message: Message):
-    if not await ensure_admin(client, message):
-        return
-
-    replied = message.reply_to_message
-    if not replied or not replied.photo:
-        return await message.reply_text(
-            "Reply to a photo with /setthumb.\n"
-            "It must be JPEG, under 200 KB, and at most 320x320 px."
-        )
-
-    p = replied.photo  # Telegram photos are JPEG
-    width = getattr(p, "width", 0) or 0
-    height = getattr(p, "height", 0) or 0
-    size_bytes = getattr(p, "file_size", 0) or 0
-
-    # Telegram photos are already JPEG
-    if not (size_bytes < 200 * 1024 and width <= 320 and height <= 320):
-        return await message.reply_text(
-            "❌ Failed — photo must be JPEG, under 200 KB, and max 320x320 px."
-        )
-
-    meta = {
-        "file_id": p.file_id,
-        "mime": "image/jpeg",
-        "width": width,
-        "height": height,
-        "size_bytes": size_bytes
-    }
-    # Save under ADMIN with the special global key
-    await tb.save_named_thumb(ADMIN, GLOBAL_PDF_THUMB_KEY, meta)
-    await message.reply_text("✅ Global PDF thumbnail saved. It will be used for all PDFs.")
-
-# ------------------ /thumbnails ------------------
-@Client.on_message(filters.command("thumbnails") & filters.private)
-async def thumbnails_cmd(client: Client, message: Message):
-    if not await ensure_admin(client, message):
-        return
-
-    thumbs = await tb.list_named_thumbs(message.from_user.id)
-    if not thumbs:
-        return await message.reply_text("No thumbnails found.")
-
-    rows = []
-    for t in thumbs:
-        rows.append([InlineKeyboardButton(t["name"], callback_data=f"thumb:view:{t['name']}")])
-    await message.reply_text("Saved thumbnails:", reply_markup=kb(rows))
-
-# ------------------ /clearthumb ------------------
-@Client.on_message(filters.command("clearthumb") & filters.private)
-async def clearthumb_cmd(client: Client, message: Message):
-    if not await ensure_admin(client, message):
-        return
-
-    parts = message.text.split(maxsplit=1)
-    thumbs = await tb.list_named_thumbs(message.from_user.id)
-
-    if len(parts) == 1:
-        if not thumbs:
-            return await message.reply_text("No thumbnails found.")
-        rows = [[InlineKeyboardButton(t["name"], callback_data=f"clearthumb:ask:{t['name']}")] for t in thumbs]
-        return await message.reply_text("Choose which thumbnail you want to delete.", reply_markup=kb(rows))
-
-    # /clearthumb <name> -> ask confirm
-    name = parts[1].strip()
-    if not any(t["name"] == name for t in thumbs):
-        return await message.reply_text("Thumbnail not found.")
-    await message.reply_text(
-        "Do you really want to delete this thumbnail?",
-        reply_markup=kb([
-            [InlineKeyboardButton("Yes", callback_data=f"clearthumb:yes:{name}"),
-             InlineKeyboardButton("No", callback_data=f"clearthumb:no:{name}")]
-        ])
-    )
-
-# ------------------ /post (entry) ------------------
-@Client.on_message(filters.command("post") & filters.private)
-async def post_entry(client: Client, message: Message):
-    if not await ensure_admin(client, message):
-        return
-
-    # Stage A — list channels the bot knows (registry)
-    chans = await tb.list_channels()
-    if not chans:
-        return await message.reply_text("Make the bot an admin in the channel where you want to post.")
-
-    # init session
-    session = {
-        "stage": "channels",
-        "channel_id": None,
-        "items": [],               # will hold dicts
-        "pdf_thumb_name": None
-    }
-    await tb.set_session(message.from_user.id, session)
-
-    rows = [[InlineKeyboardButton(c["title"], callback_data=f"post:chan:{c['chat_id']}")] for c in chans]
-    await message.reply_text("Select a channel to post:", reply_markup=kb(rows))
-
-# ------------------ Collector while in stage=collect ------------------
-@Client.on_message(filters.private & ~filters.command(["start", "help", "setthumb", "thumbnails", "clearthumb", "post"]))
-async def collect_items(client: Client, message: Message):
-    uid = message.from_user.id
-    session = await tb.get_session(uid)
-    if not session or session.get("stage") != "collect":
-        return  # ignore normal chat
-
-    item: Optional[Dict[str, Any]] = None
-
-    if message.text:
-        item = {"type": "text", "text": message.text}
-    elif message.document:
-        doc = message.document
-        item = {
-            "type": "document",
-            "file_id": doc.file_id,
-            "file_name": doc.file_name,
-            "mime": doc.mime_type or "",
-            "caption": message.caption or "",
-            "is_pdf": (doc.mime_type == "application/pdf")
-        }
-        # attach global thumb if this is a PDF and a global thumb exists
-        if item["is_pdf"]:
-            gthumb = await _get_global_pdf_thumb_file_id()
-            if gthumb:
-                item["thumb_file_id"] = gthumb
-    elif message.photo:
-        item = {"type": "photo", "file_id": message.photo.file_id, "caption": message.caption or ""}
-    elif message.video:
-        item = {"type": "video", "file_id": message.video.file_id, "caption": message.caption or ""}
-    elif message.sticker:
-        item = {"type": "sticker", "file_id": message.sticker.file_id}
+@Client.on_message(filters.command('accept') & filters.private)
+async def accept(client, message):
+    show = await message.reply("**Please Wait.....**")
+    user_data = await tb.get_session(message.from_user.id)
+    if user_data is None:
+        return await show.edit("**To accept join requests, please /login first.**")
+    try:
+        acc = Client("joinrequest", session_string=user_data, api_id=API_ID, api_hash=API_HASH)
+        await acc.connect()
+    except:
+        return await show.edit("**Your login session has expired. Use /logout first, then /login again.**")
+    await show.edit("**Forward a message from your Channel or Group (with forward tag).\n\nMake sure your logged-in account is an admin there with full rights.**")
+    fwd_msg = await client.listen(message.chat.id)
+    if fwd_msg.forward_from_chat and fwd_msg.forward_from_chat.type not in [enums.ChatType.PRIVATE, enums.ChatType.BOT]:
+        chat_id = fwd_msg.forward_from_chat.id
+        try:
+            info = await acc.get_chat(chat_id)
+        except:
+            return await show.edit("**Error: Ensure your account is admin in this Channel/Group with required rights.**")
     else:
-        return await message.reply_text("This message type is not supported for posting yet.")
+        return await message.reply("**Message not forwarded from a valid Channel/Group.**")
+    await fwd_msg.delete()
+    msg = await show.edit("**Accepting all join requests... Please wait.**")
+    try:
+        while True:
+            await acc.approve_all_chat_join_requests(chat_id)
+            await asyncio.sleep(1)
+            join_requests = [req async for req in acc.get_chat_join_requests(chat_id)]
+            if not join_requests:
+                break
+        await msg.edit("**✅ Successfully accepted all join requests.**")
+    except Exception as e:
+        await msg.edit(f"**An error occurred:** `{str(e)}`")
 
-    session["items"].append(item)
-    await tb.set_session(uid, session)
-
-    await message.reply_text(
-        "Added. Send more or continue.",
-        reply_markup=kb([
-            [InlineKeyboardButton("Add", callback_data="post:add"),
-             InlineKeyboardButton("Continue", callback_data="post:continue")]
-        ])
-    )
-
-# ------------------ Fallback unknown command ------------------
-# FIX: you cannot use filters.command without arguments.
-# We catch any "/" command in private via regex and reply if it isn't known.
-@Client.on_message(filters.private & filters.regex(r"^/"), group=99)
-async def unknown_command(client: Client, message: Message):
-    known = {"start", "help", "setthumb", "thumbnails", "clearthumb", "post"}
-    text_msg = message.text or ""
-    cmd = text_msg.split()[0][1:].split("@")[0].lower() if text_msg.startswith("/") else ""
-    if cmd in known:
+@Client.on_chat_join_request()
+async def approve_new(client, m):
+    if not NEW_REQ_MODE:
         return
-    await message.reply_text(ADMIN_ONLY_TEXT)
+    try:
+        await client.approve_chat_join_request(m.chat.id, m.from_user.id)
+        try:
+            await client.send_message(
+                m.from_user.id,
+                f"{m.from_user.mention},\n\n𝖸𝗈𝗎𝗋 𝖱𝖾𝗊𝗎𝗌𝗍 𝖳𝗈 𝖩𝗈𝗂𝗇 {m.chat.title} 𝖧𝖺𝗌 𝖡𝖾𝖾𝗇 𝖠𝖼𝖼𝖾𝗉𝗍𝖾𝖽."
+            )
+        except:
+            pass
+    except Exception as e:
+        print(str(e))
+        pass
